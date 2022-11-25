@@ -38,6 +38,7 @@ async function run() {
     try {
         const usersCollection = client.db('storyKeeper').collection('users');
         const productsCollection = client.db('storyKeeper').collection('products');
+        const bookingsCollection = client.db('storyKeeper').collection('bookings');
 
         const verifyAdmin = async (req, res, next) => {
             const decodedEmail = req.decoded.email;
@@ -62,15 +63,16 @@ async function run() {
         }
 
         app.post('/users', async (req, res) => {
-            const email = req.body.email
-            const userQuery = { email: email }
+            const email = req.body.email;
+            const userQuery = {};
             const alreadyRegistered = await usersCollection.find(userQuery).toArray();
-            if (alreadyRegistered) {
-                return;
+            const alreadyRegisteredEmails = alreadyRegistered.map(reg => reg.email)
+            if (!alreadyRegisteredEmails.includes(email)) {
+                const user = req.body;
+                const result = await usersCollection.insertOne(user);
+                res.send(result);
             }
-            const user = req.body;
-            const result = await usersCollection.insertOne(user);
-            res.send(result);
+
         })
 
         app.get('/jwt', async (req, res) => {
@@ -95,6 +97,20 @@ async function run() {
             const users = await usersCollection.find(query).toArray();
             res.send(users);
         });
+
+        app.get('/users/admin/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const user = await usersCollection.findOne(query);
+            res.send({ isAdmin: user?.role === 'admin' })
+        })
+
+        app.get('/users/seller/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const user = await usersCollection.findOne(query);
+            res.send({ isSeller: user?.role === 'seller' })
+        })
 
         app.get('/userData', verifyJWT, async (req, res) => {
             const email = req.query.email;
@@ -126,11 +142,40 @@ async function run() {
             res.send(products);
         })
 
+        app.patch('/products/:id', async (req, res) => {
+            const id = req.params.id;
+            const isAd = req.body.isAd;
+            const query = { _id: ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    isAd
+                }
+            }
+            const result = await productsCollection.updateOne(query, updatedDoc);
+            res.send(result);
+        })
+
+        app.delete('/products/:id', verifyJWT, verifySeller, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) };
+            const result = await productsCollection.deleteOne(filter);
+            res.send(result);
+        })
+
         app.get('/category/:id', async (req, res) => {
             const category = req.params.id;
             const query = { category: category };
             const products = await productsCollection.find(query).toArray();
+            // const bookingQuery = {}
+            // const alreadyBooked = await bookingsCollection.find(bookingQuery).toArray();
+            // const bookedIds = alreadyBooked.map(book => book.productID);
+            // const remainingProductIds = products.map(product => product._id !== bookedIds);
+            // const remainingProducts = products.filter(product => product._id === remainingProductIds);
+            // console.log(remainingProductIds)
+            // const productsBooked = alreadyBooked.filter(book => book.productID === product._id);
+            // const remainingProducts = products.filter(product => product !== productsBooked)
             res.send(products);
+
         })
 
         app.get('/recentlyadded', async (req, res) => {
@@ -139,6 +184,26 @@ async function run() {
             res.send(products);
         })
 
+        app.get('/advertisedProducts', async (req, res) => {
+            const query = { isAd: true };
+            const products = await productsCollection.find(query).limit(3).sort({ "date": -1 }).toArray();
+            res.send(products);
+        })
+
+
+        //bookings
+
+        app.post('/bookings', async (req, res) => {
+            const booking = req.body;
+            const query = { productID: booking.productID }
+            const alreadyBooked = await bookingsCollection.find(query).toArray();
+            if (alreadyBooked.length) {
+                const message = `${booking.productName} is already booked`
+                return res.send({ acknowledged: false, message })
+            }
+            const result = await bookingsCollection.insertOne(booking);
+            res.send(result);
+        });
 
 
 
