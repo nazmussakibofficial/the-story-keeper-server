@@ -166,15 +166,11 @@ async function run() {
             const category = req.params.id;
             const query = { category: category };
             const products = await productsCollection.find(query).toArray();
-            // const bookingQuery = {}
-            // const alreadyBooked = await bookingsCollection.find(bookingQuery).toArray();
-            // const bookedIds = alreadyBooked.map(book => book.productID);
-            // const remainingProductIds = products.map(product => product._id !== bookedIds);
-            // const remainingProducts = products.filter(product => product._id === remainingProductIds);
-            // console.log(remainingProductIds)
-            // const productsBooked = alreadyBooked.filter(book => book.productID === product._id);
-            // const remainingProducts = products.filter(product => product !== productsBooked)
-            res.send(products);
+            const bookingQuery = {}
+            const alreadyBooked = await bookingsCollection.find(bookingQuery).toArray();
+            const bookedIds = alreadyBooked.map(book => book.productID);
+            const remainingProducts = products.filter(product => !bookedIds.includes(ObjectId(product._id).toString()));
+            res.send(remainingProducts);
 
         })
 
