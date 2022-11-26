@@ -42,6 +42,7 @@ async function run() {
         const productsCollection = client.db('storyKeeper').collection('products');
         const bookingsCollection = client.db('storyKeeper').collection('bookings');
         const paymentsCollection = client.db('storyKeeper').collection('payments');
+        const wishlistCollection = client.db('storyKeeper').collection('wishlist');
 
         // users
         const verifyAdmin = async (req, res, next) => {
@@ -233,6 +234,18 @@ async function run() {
             res.send(result);
         });
 
+        app.post('/wishlist', async (req, res) => {
+            const wishlistItem = req.body;
+            const query = { productID: wishlistItem.productID }
+            const alreadyExists = await wishlistCollection.find(query).toArray();
+            if (alreadyExists.length) {
+                const message = `${wishlistItem.productName} is already wishlisted`
+                return res.send({ acknowledged: false, message })
+            }
+            const result = await wishlistCollection.insertOne(wishlistItem);
+            res.send(result);
+        });
+
         app.get('/bookings', verifyJWT, async (req, res) => {
             const email = req.query.email;
             const decodedEmail = req.decoded.email;
@@ -245,6 +258,26 @@ async function run() {
             const bookings = await bookingsCollection.find(query).toArray();
             res.send(bookings);
         });
+
+        app.get('/wishlist', verifyJWT, async (req, res) => {
+            const email = req.query.email;
+            const decodedEmail = req.decoded.email;
+
+            if (email !== decodedEmail) {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+
+            const query = { userEmail: email };
+            const wishlist = await wishlistCollection.find(query).toArray();
+            res.send(wishlist);
+        });
+
+        app.get('/wishlist/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const wishlistItem = await wishlistCollection.findOne(query);
+            res.send(wishlistItem);
+        })
 
         app.get('/bookings/:id', async (req, res) => {
             const id = req.params.id;
@@ -277,6 +310,8 @@ async function run() {
             const bookingFilter = { _id: ObjectId(bookingId) }
             const productId = payment.productID
             const productFilter = { _id: ObjectId(productId) }
+            const wishlistId = payment.productID
+            const wishlistFilter = { productID: wishlistId }
             const updatedDoc = {
                 $set: {
                     paid: true,
@@ -285,6 +320,7 @@ async function run() {
             }
             const updatedBooking = await bookingsCollection.updateOne(bookingFilter, updatedDoc)
             const updatedProduct = await productsCollection.updateOne(productFilter, updatedDoc)
+            const updatedWishlist = await wishlistCollection.updateOne(wishlistFilter, updatedDoc)
             res.send(result);
         })
 
