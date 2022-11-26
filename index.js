@@ -225,7 +225,7 @@ async function run() {
 
         app.get('/category/:id', async (req, res) => {
             const category = req.params.id;
-            const query = { category: category };
+            const query = { category: category, paid: { $ne: true } };
             const products = await productsCollection.find(query).toArray();
             // **** this part filters the products based on booked products****
             // const bookingQuery = {}
@@ -237,13 +237,13 @@ async function run() {
         })
 
         app.get('/recentlyadded', async (req, res) => {
-            const query = {};
+            const query = { paid: { $ne: true } };
             const products = await productsCollection.find(query).limit(3).sort({ "date": -1 }).toArray();
             res.send(products);
         })
 
         app.get('/advertisedProducts', async (req, res) => {
-            const query = { isAd: true };
+            const query = { isAd: true, paid: { $ne: true } };
             const products = await productsCollection.find(query).limit(3).sort({ "date": -1 }).toArray();
             res.send(products);
         })
