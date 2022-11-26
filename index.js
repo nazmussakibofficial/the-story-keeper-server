@@ -43,6 +43,7 @@ async function run() {
         const bookingsCollection = client.db('storyKeeper').collection('bookings');
         const paymentsCollection = client.db('storyKeeper').collection('payments');
         const wishlistCollection = client.db('storyKeeper').collection('wishlist');
+        const reportsCollection = client.db('storyKeeper').collection('reports');
 
         // users
         const verifyAdmin = async (req, res, next) => {
@@ -92,7 +93,7 @@ async function run() {
             res.status(403).send({ accessToken: '' })
         });
 
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
             let query = {};
             if (req.query.role === "buyer") {
                 query = { role: 'buyer' }
@@ -143,12 +144,45 @@ async function run() {
             res.send(user);
         });
 
+        app.patch('/users/:id', verifyJWT, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const isVerified = req.body.isVerified;
+            console.log(isVerified)
+            const query = { _id: ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    isVerified
+                }
+            }
+            const result = await usersCollection.updateOne(query, updatedDoc);
+            res.send(result);
+        })
+
         // products
 
         app.post('/products', verifyJWT, verifySeller, async (req, res) => {
             const { name, image, category, location, resale, original, usedTime, condition, sellerName, sellerEmail } = req.body;
             const result = await productsCollection.insertOne({ name, image, category, location, resale, original, usedTime, condition, sellerName, sellerEmail, date: new Date() });
             res.send(result);
+        });
+
+        app.post('/reporteditems', async (req, res) => {
+            const reportedItem = req.body;
+            const query = { productID: reportedItem.productID }
+            const alreadyExists = await reportsCollection.find(query).toArray();
+            if (alreadyExists.length) {
+                const message = `${reportedItem.productName} is already reported`
+                return res.send({ acknowledged: false, message })
+            }
+            const result = await reportsCollection.insertOne(reportedItem);
+            res.send(result);
+        });
+
+        app.get('/reportedItems', verifyJWT, verifyAdmin, async (req, res) => {
+            const query = {};
+            const reports = await reportsCollection.find(query).toArray();
+            res.send(reports);
+
         });
 
         app.get('/products', verifyJWT, verifySeller, async (req, res) => {
@@ -175,10 +209,17 @@ async function run() {
             res.send(result);
         })
 
-        app.delete('/products/:id', verifyJWT, verifySeller, async (req, res) => {
+        app.delete('/products/:id', verifyJWT, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: ObjectId(id) };
             const result = await productsCollection.deleteOne(filter);
+            res.send(result);
+        })
+
+        app.delete('/reporteditems/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) };
+            const result = await reportsCollection.deleteOne(filter);
             res.send(result);
         })
 
@@ -186,11 +227,12 @@ async function run() {
             const category = req.params.id;
             const query = { category: category };
             const products = await productsCollection.find(query).toArray();
-            const bookingQuery = {}
-            const alreadyBooked = await bookingsCollection.find(bookingQuery).toArray();
-            const bookedIds = alreadyBooked.map(book => book.productID);
-            const remainingProducts = products.filter(product => !bookedIds.includes(ObjectId(product._id).toString()));
-            res.send(remainingProducts);
+            // **** this part filters the products based on booked products****
+            // const bookingQuery = {}
+            // const alreadyBooked = await bookingsCollection.find(bookingQuery).toArray();
+            // const bookedIds = alreadyBooked.map(book => book.productID);
+            // const remainingProducts = products.filter(product => !bookedIds.includes(ObjectId(product._id).toString()));
+            res.send(products);
 
         })
 
@@ -204,20 +246,6 @@ async function run() {
             const query = { isAd: true };
             const products = await productsCollection.find(query).limit(3).sort({ "date": -1 }).toArray();
             res.send(products);
-        })
-
-        app.patch('/users/:id', async (req, res) => {
-            const id = req.params.id;
-            const isVerified = req.body.isVerified;
-            console.log(isVerified)
-            const query = { _id: ObjectId(id) }
-            const updatedDoc = {
-                $set: {
-                    isVerified
-                }
-            }
-            const result = await usersCollection.updateOne(query, updatedDoc);
-            res.send(result);
         })
 
         //bookings
